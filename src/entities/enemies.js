@@ -16,11 +16,12 @@ class Enemy {
 
         // Stats by type
         const stats = {
-            grunt:   { hp: 30, damage: 8, speed: 80, color: '#885588' },
-            charger: { hp: 50, damage: 15, speed: 150, color: '#aa5533' },
-            phase:   { hp: 60, damage: 12, speed: 60, color: '#6644aa', shieldPhase: true },
-            swarm:   { hp: 10, damage: 5, speed: 120, color: '#aaaa33', width: 16, height: 16 },
-            elite:   { hp: 120, damage: 20, speed: 50, color: '#cc2255' },
+            grunt:   { hp: 30, damage: 8, speed: 110, color: '#885588' },
+            charger: { hp: 50, damage: 15, speed: 200, color: '#aa5533' },
+            phase:   { hp: 60, damage: 12, speed: 85, color: '#6644aa', shieldPhase: true },
+            swarm:   { hp: 10, damage: 5, speed: 160, color: '#aaaa33', width: 16, height: 16 },
+            elite:   { hp: 120, damage: 20, speed: 70, color: '#cc2255' },
+            flyer:   { hp: 25, damage: 10, speed: 100, color: '#44aacc', width: 24, height: 20, flying: true },
         };
         const s = stats[type] || stats.grunt;
         this.maxHP = s.hp;
@@ -30,6 +31,8 @@ class Enemy {
         this.color = s.color;
         if (s.width) { this.width = s.width; this.height = s.height; }
         this.shieldPhase = s.shieldPhase || false;
+        this.flying = s.flying || false;
+        this.flyTargetY = 0; // for flying enemies
 
         // State
         this.state = 'patrol'; // patrol, chase, attack, hurt, frozen
@@ -110,34 +113,75 @@ class Enemy {
 
         this.attackCooldown = Math.max(0, this.attackCooldown - dt);
 
-        if (dist < this.attackRange && this.attackCooldown <= 0) {
-            this.state = 'attack';
-            this.performAttack(player, engine);
-        } else if (dist < this.aggroRange) {
-            this.state = 'chase';
-            this.vx = this.facing * this.speed * speedMult;
-        } else {
-            this.state = 'patrol';
-            this.patrolTimer += dt;
-            if (this.patrolTimer > 2) {
-                this.patrolTimer = 0;
-                this.patrolDir *= -1;
+        if (this.flying) {
+            // ── Flying enemy AI ──
+            // Hover above player, strafe, and shoot
+            const targetX = player.x + Math.sin(this.animTimer * 1.5) * 120;
+            const targetY = player.y - 120 - Math.sin(this.animTimer * 2) * 30;
+            const toX = targetX - this.x;
+            const toY = targetY - this.y;
+            this.vx = toX * 2 * speedMult;
+            this.vy = toY * 2 * speedMult;
+
+            if (dist < this.aggroRange) {
+                this.state = 'chase';
+            } else {
+                this.state = 'patrol';
             }
-            this.vx = this.patrolDir * this.speed * 0.3 * speedMult;
-        }
 
-        // Gravity
-        this.vy += 800 * dt;
+            // Ranged attack — shoot projectiles
+            if (dist < 300 && this.attackCooldown <= 0) {
+                this.state = 'attack';
+                this.attackCooldown = 1.2;
+                this.attackTimer = 0.2;
+                const angle = Math.atan2(player.y + player.height / 2 - (this.y + this.height / 2),
+                                         player.x + player.width / 2 - (this.x + this.width / 2));
+                const projSpeed = 280;
+                const proj = new Projectile(
+                    this.x + this.width / 2,
+                    this.y + this.height / 2,
+                    Math.cos(angle) * projSpeed,
+                    Math.sin(angle) * projSpeed,
+                    this.damage, '#44aacc', 'enemy'
+                );
+                engine.addEntity(proj);
+                engine.audio.playHit('calm');
+            }
 
-        // Apply physics
-        this.x += this.vx * dt;
-        this.y += this.vy * dt;
+            // Apply physics (no gravity for flyers)
+            this.x += this.vx * dt;
+            this.y += this.vy * dt;
+        } else {
+            // ── Ground enemy AI ──
+            if (dist < this.attackRange && this.attackCooldown <= 0) {
+                this.state = 'attack';
+                this.performAttack(player, engine);
+            } else if (dist < this.aggroRange) {
+                this.state = 'chase';
+                this.vx = this.facing * this.speed * speedMult;
+            } else {
+                this.state = 'patrol';
+                this.patrolTimer += dt;
+                if (this.patrolTimer > 2) {
+                    this.patrolTimer = 0;
+                    this.patrolDir *= -1;
+                }
+                this.vx = this.patrolDir * this.speed * 0.3 * speedMult;
+            }
 
-        // Floor
-        const floorY = engine.level ? engine.level.getFloorY(this.x, this.width) : engine.height - 80;
-        if (this.y + this.height > floorY) {
-            this.y = floorY - this.height;
-            this.vy = 0;
+            // Gravity
+            this.vy += 800 * dt;
+
+            // Apply physics
+            this.x += this.vx * dt;
+            this.y += this.vy * dt;
+
+            // Floor
+            const floorY = engine.level ? engine.level.getFloorY(this.x, this.width) : engine.height - 80;
+            if (this.y + this.height > floorY) {
+                this.y = floorY - this.height;
+                this.vy = 0;
+            }
         }
 
         // Level bounds
@@ -246,6 +290,9 @@ class Enemy {
                 break;
             case 'elite':
                 this._renderElite(ctx, t, isHurt);
+                break;
+            case 'flyer':
+                this._renderFlyer(ctx, t, isHurt);
                 break;
             default:
                 this._renderGrunt(ctx, t, isHurt);
@@ -521,6 +568,80 @@ class Enemy {
         const legOff = this.state === 'chase' ? Math.sin(t * 7) * 4 : 0;
         ctx.fillRect(-hw + 1, hh, 10, 6 + legOff);
         ctx.fillRect(hw - 11, hh, 10, 6 - legOff);
+    }
+
+    _renderFlyer(ctx, t, isHurt) {
+        const hw = this.width / 2;
+        const hh = this.height / 2;
+        const hover = Math.sin(t * 5) * 4;
+
+        ctx.translate(0, hover);
+
+        // Thruster glow below
+        ctx.fillStyle = `rgba(68, 170, 200, ${0.2 + Math.sin(t * 15) * 0.1})`;
+        ctx.beginPath();
+        ctx.moveTo(-6, hh);
+        ctx.lineTo(6, hh);
+        ctx.lineTo(3, hh + 10 + Math.sin(t * 20) * 4);
+        ctx.lineTo(-3, hh + 10 + Math.sin(t * 20 + 1) * 4);
+        ctx.fill();
+
+        // Body — angular drone
+        ctx.fillStyle = isHurt ? '#fff' : '#336688';
+        ctx.beginPath();
+        ctx.moveTo(0, -hh);
+        ctx.lineTo(hw, 0);
+        ctx.lineTo(hw - 3, hh);
+        ctx.lineTo(-hw + 3, hh);
+        ctx.lineTo(-hw, 0);
+        ctx.closePath();
+        ctx.fill();
+
+        // Cockpit / sensor dome
+        ctx.fillStyle = isHurt ? '#fff' : '#44aacc';
+        ctx.shadowColor = '#44aacc';
+        ctx.shadowBlur = 6;
+        ctx.beginPath();
+        ctx.arc(0, -2, 5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.shadowBlur = 0;
+
+        // Wings
+        ctx.fillStyle = '#2a5566';
+        const wingFlap = Math.sin(t * 12) * 3;
+        // Left wing
+        ctx.fillRect(-hw - 8, -2 + wingFlap, 10, 3);
+        ctx.fillRect(-hw - 6, -4 + wingFlap, 3, 7);
+        // Right wing
+        ctx.fillRect(hw - 2, -2 - wingFlap, 10, 3);
+        ctx.fillRect(hw + 3, -4 - wingFlap, 3, 7);
+
+        // Wing tip lights
+        const blink = Math.sin(t * 8) > 0;
+        if (blink) {
+            ctx.fillStyle = '#ff3333';
+            ctx.shadowColor = '#ff3333';
+            ctx.shadowBlur = 4;
+            ctx.beginPath();
+            ctx.arc(-hw - 7, -1 + wingFlap, 2, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.beginPath();
+            ctx.arc(hw + 7, -1 - wingFlap, 2, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.shadowBlur = 0;
+        }
+
+        // Targeting laser when attacking
+        if (this.attackTimer > 0) {
+            ctx.strokeStyle = 'rgba(255, 50, 50, 0.4)';
+            ctx.lineWidth = 1;
+            ctx.setLineDash([4, 4]);
+            ctx.beginPath();
+            ctx.moveTo(0, hh);
+            ctx.lineTo(this.facing * 60, hh + 80);
+            ctx.stroke();
+            ctx.setLineDash([]);
+        }
     }
 }
 

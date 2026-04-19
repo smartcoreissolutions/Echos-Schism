@@ -168,8 +168,8 @@ class Level {
                 let types;
                 if (w === 0) types = ['grunt', 'grunt', 'swarm', 'swarm', 'charger'];
                 else if (w === 1) types = ['grunt', 'charger', 'charger', 'swarm', 'phase'];
-                else if (w === 2) types = ['charger', 'phase', 'phase', 'swarm', 'grunt'];
-                else types = ['charger', 'phase', 'elite', 'swarm', 'grunt', 'phase'];
+                else if (w === 2) types = ['charger', 'phase', 'phase', 'swarm', 'flyer'];
+                else types = ['charger', 'phase', 'elite', 'swarm', 'flyer', 'flyer', 'phase'];
                 wave.push({
                     type: types[Math.floor(Math.random() * types.length)],
                     x: 200 + Math.random() * (this.width - 400),
@@ -179,11 +179,38 @@ class Level {
         }
     }
 
-    getFloorY(x, width) {
+    getFloorY(x, width, vy) {
+        // vy is optional — used for one-way platform check (only land when falling)
         let floorY = this.baseFloorY;
         for (const p of this.platforms) {
             if (x + width > p.x && x < p.x + p.width) {
-                if (p.type === 'ground') floorY = Math.min(floorY, p.y);
+                if (p.type === 'ground') {
+                    floorY = Math.min(floorY, p.y);
+                } else if (p.type === 'platform') {
+                    // One-way platform: only land from above (vy >= 0 means falling or standing)
+                    if (vy === undefined || vy >= 0) {
+                        floorY = Math.min(floorY, p.y);
+                    }
+                }
+            }
+        }
+        return floorY;
+    }
+
+    getFloorYPlayer(x, width, feetY, vy) {
+        // For player: only collide with platforms if feet were above the platform surface
+        // and player is falling (vy >= 0). This allows jumping up through platforms.
+        let floorY = this.baseFloorY;
+        for (const p of this.platforms) {
+            if (x + width > p.x && x < p.x + p.width) {
+                if (p.type === 'ground') {
+                    floorY = Math.min(floorY, p.y);
+                } else if (p.type === 'platform') {
+                    // One-way: only land if falling AND feet are within ~15px of platform top
+                    if (vy >= 0 && feetY >= p.y - 8 && feetY <= p.y + p.height + 10) {
+                        floorY = Math.min(floorY, p.y);
+                    }
+                }
             }
         }
         return floorY;

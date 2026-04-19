@@ -180,9 +180,9 @@ class Player {
         this.x += this.vx * dt;
         this.y += this.vy * dt;
 
-        // --- FLOOR COLLISION ---
-        const floorY = engine.level ? engine.level.getFloorY(this.x, this.width) : engine.height - 80;
-        if (this.y + this.height > floorY) {
+        // --- FLOOR COLLISION (one-way platforms: only land if falling & feet near surface) ---
+        const floorY = engine.level ? engine.level.getFloorYPlayer(this.x, this.width, this.y + this.height, this.vy) : engine.height - 80;
+        if (this.y + this.height > floorY && this.vy >= 0) {
             this.y = floorY - this.height;
             this.vy = 0;
             this.grounded = true;
@@ -203,9 +203,12 @@ class Player {
         // --- ULTIMATE CHARGE ---
         this.ultimateCharge = Math.min(100, this.ultimateCharge + 2 * dt);
 
-        // --- DEEP STATE DAMAGE ---
+        // --- DEEP STATE DAMAGE (tapers off as HP gets low) ---
         if (this.inDeepState && this.persona === 'frenzy') {
-            this.hp = Math.max(1, this.hp - 8 * dt);
+            const hpRatio = this.hp / this.maxHP;
+            // Full drain at 8/s above 50% HP, tapers to 1.5/s below 20%
+            const drainRate = hpRatio > 0.5 ? 8 : (hpRatio > 0.2 ? 4 : 1.5);
+            this.hp = Math.max(1, this.hp - drainRate * dt);
         }
 
         // --- ANIMATION STATE ---
