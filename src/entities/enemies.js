@@ -199,71 +199,328 @@ class Enemy {
         ctx.save();
         ctx.translate(this.x + this.width / 2, this.y + this.height / 2);
 
+        const t = this.animTimer;
+
+        // Ground shadow
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
+        ctx.beginPath();
+        ctx.ellipse(0, this.height / 2 + 2, this.width / 2, 3, 0, 0, Math.PI * 2);
+        ctx.fill();
+
         // Frozen effect
         if (this.frozenTimer > 0) {
             ctx.globalAlpha = 0.7;
+            // Ice crystal overlay
             ctx.fillStyle = '#88ccff';
             ctx.fillRect(-this.width / 2 - 3, -this.height / 2 - 3, this.width + 6, this.height + 6);
+            // Ice shards
+            ctx.fillStyle = '#aaddff';
+            ctx.fillRect(-this.width / 2 - 5, -5, 3, 10);
+            ctx.fillRect(this.width / 2 + 2, -8, 3, 12);
+            ctx.fillRect(-3, -this.height / 2 - 5, 6, 4);
             ctx.globalAlpha = 1;
         }
 
         // Burn effect
         if (this.burnTimer > 0) {
             ctx.shadowColor = '#ff4400';
-            ctx.shadowBlur = 10;
+            ctx.shadowBlur = 10 + Math.sin(t * 12) * 5;
         }
 
         // Hurt flash
-        if (this.hurtTimer > 0) {
-            ctx.fillStyle = '#ffffff';
-        } else {
-            ctx.fillStyle = this.color;
+        const isHurt = this.hurtTimer > 0;
+
+        // ── Type-specific rendering ──
+        switch (this.type) {
+            case 'grunt':
+                this._renderGrunt(ctx, t, isHurt);
+                break;
+            case 'charger':
+                this._renderCharger(ctx, t, isHurt);
+                break;
+            case 'phase':
+                this._renderPhase(ctx, t, isHurt);
+                break;
+            case 'swarm':
+                this._renderSwarm(ctx, t, isHurt);
+                break;
+            case 'elite':
+                this._renderElite(ctx, t, isHurt);
+                break;
+            default:
+                this._renderGrunt(ctx, t, isHurt);
         }
 
-        // Body
-        ctx.fillRect(-this.width / 2, -this.height / 2, this.width, this.height);
-
-        // Eyes
-        ctx.fillStyle = '#ff0000';
-        const eyeX = this.facing > 0 ? 2 : -8;
-        ctx.fillRect(eyeX, -this.height / 2 + 6, 3, 3);
-        ctx.fillRect(eyeX + 5, -this.height / 2 + 6, 3, 3);
-
-        // Phase shield indicator
-        if (this.shieldPhase) {
-            ctx.strokeStyle = this.shieldColor === 'red' ? '#ff3333' : '#3388ff';
-            ctx.lineWidth = 2;
-            ctx.globalAlpha = 0.5 + Math.sin(this.animTimer * 8) * 0.3;
-            ctx.strokeRect(-this.width / 2 - 4, -this.height / 2 - 4, this.width + 8, this.height + 8);
-            ctx.globalAlpha = 1;
-
-            // Label
-            ctx.fillStyle = this.shieldColor === 'red' ? '#ff3333' : '#3388ff';
-            ctx.font = '8px monospace';
-            ctx.textAlign = 'center';
-            ctx.fillText(this.shieldColor === 'red' ? '🔥' : '🧊', 0, -this.height / 2 - 8);
-        }
-
-        // Type indicator for elite
-        if (this.type === 'elite') {
-            ctx.fillStyle = '#ffcc00';
-            ctx.font = '10px monospace';
-            ctx.textAlign = 'center';
-            ctx.fillText('★', 0, -this.height / 2 - 5);
-        }
+        ctx.shadowBlur = 0;
 
         // HP bar
         if (this.hp < this.maxHP) {
-            const barW = this.width + 4;
+            const barW = this.width + 8;
             const barH = 3;
-            const barY = -this.height / 2 - 8;
+            const barY = -this.height / 2 - 10;
+            ctx.fillStyle = '#1a1a1a';
+            ctx.fillRect(-barW / 2 - 1, barY - 1, barW + 2, barH + 2);
             ctx.fillStyle = '#333';
             ctx.fillRect(-barW / 2, barY, barW, barH);
-            ctx.fillStyle = '#ff3333';
-            ctx.fillRect(-barW / 2, barY, barW * (this.hp / this.maxHP), barH);
+            const hpPct = this.hp / this.maxHP;
+            const hpColor = hpPct > 0.5 ? '#44cc44' : (hpPct > 0.25 ? '#ccaa22' : '#cc2222');
+            ctx.fillStyle = hpColor;
+            ctx.fillRect(-barW / 2, barY, barW * hpPct, barH);
         }
 
         ctx.restore();
+    }
+
+    _renderGrunt(ctx, t, isHurt) {
+        const hw = this.width / 2;
+        const hh = this.height / 2;
+
+        // Body
+        ctx.fillStyle = isHurt ? '#ffffff' : '#665566';
+        ctx.fillRect(-hw, -hh, this.width, this.height);
+
+        // Armor plate
+        ctx.fillStyle = isHurt ? '#ffffff' : '#554455';
+        ctx.fillRect(-hw + 2, -hh + 5, this.width - 4, 12);
+
+        // Legs
+        const legOff = this.state === 'chase' ? Math.sin(t * 10) * 4 : 0;
+        ctx.fillStyle = '#333';
+        ctx.fillRect(-hw + 2, hh - 4, 8, 4 + legOff);
+        ctx.fillRect(hw - 10, hh - 4, 8, 4 - legOff);
+
+        // Head
+        ctx.fillStyle = isHurt ? '#fff' : '#776677';
+        ctx.fillRect(-6, -hh - 6, 12, 8);
+
+        // Visor
+        ctx.fillStyle = '#ff2222';
+        ctx.shadowColor = '#ff0000';
+        ctx.shadowBlur = 4;
+        ctx.fillRect(-4, -hh - 3, 8, 3);
+        ctx.shadowBlur = 0;
+
+        // Weapon stub
+        ctx.fillStyle = '#555';
+        const wx = this.facing > 0 ? hw : -hw - 8;
+        ctx.fillRect(wx, -2, 10, 4);
+    }
+
+    _renderCharger(ctx, t, isHurt) {
+        const hw = this.width / 2;
+        const hh = this.height / 2;
+
+        // Bulky body
+        ctx.fillStyle = isHurt ? '#ffffff' : '#8a5533';
+        ctx.fillRect(-hw - 2, -hh, this.width + 4, this.height);
+
+        // Heavy armor
+        ctx.fillStyle = isHurt ? '#fff' : '#774422';
+        ctx.fillRect(-hw, -hh + 3, this.width, 8);
+        ctx.fillRect(-hw, hh - 12, this.width, 4);
+
+        // Spikes on shoulders
+        ctx.fillStyle = '#aa6633';
+        ctx.beginPath();
+        ctx.moveTo(-hw - 4, -hh + 6);
+        ctx.lineTo(-hw - 8, -hh - 4);
+        ctx.lineTo(-hw, -hh + 2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.moveTo(hw + 4, -hh + 6);
+        ctx.lineTo(hw + 8, -hh - 4);
+        ctx.lineTo(hw, -hh + 2);
+        ctx.fill();
+
+        // Head
+        ctx.fillStyle = isHurt ? '#fff' : '#995533';
+        ctx.fillRect(-7, -hh - 8, 14, 10);
+
+        // Angry eyes
+        ctx.fillStyle = '#ff4400';
+        ctx.shadowColor = '#ff4400';
+        ctx.shadowBlur = 5;
+        ctx.fillRect(-5, -hh - 5, 4, 3);
+        ctx.fillRect(1, -hh - 5, 4, 3);
+        ctx.shadowBlur = 0;
+
+        // Charge indicator when chasing
+        if (this.state === 'chase') {
+            ctx.fillStyle = `rgba(255, 80, 30, ${0.3 + Math.sin(t * 10) * 0.2})`;
+            const dir = this.facing;
+            ctx.fillRect(dir > 0 ? hw : -hw - 12, -4, 12, 8);
+        }
+
+        // Stompy legs
+        const legOff = this.state === 'chase' ? Math.sin(t * 8) * 5 : 0;
+        ctx.fillStyle = '#444';
+        ctx.fillRect(-hw, hh - 2, 10, 6 + legOff);
+        ctx.fillRect(hw - 10, hh - 2, 10, 6 - legOff);
+    }
+
+    _renderPhase(ctx, t, isHurt) {
+        const hw = this.width / 2;
+        const hh = this.height / 2;
+
+        // Shield aura
+        const shieldCol = this.shieldColor === 'red' ? '#ff3333' : '#3388ff';
+        ctx.strokeStyle = shieldCol;
+        ctx.lineWidth = 2;
+        ctx.globalAlpha = 0.4 + Math.sin(t * 6) * 0.25;
+        ctx.shadowColor = shieldCol;
+        ctx.shadowBlur = 10;
+        ctx.beginPath();
+        ctx.arc(0, 0, hw + 8, 0, Math.PI * 2);
+        ctx.stroke();
+        // Inner ring
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.arc(0, 0, hw + 4, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+        ctx.globalAlpha = 1;
+
+        // Body — sleek, techy
+        ctx.fillStyle = isHurt ? '#fff' : '#5544aa';
+        ctx.fillRect(-hw, -hh, this.width, this.height);
+
+        // Circuit lines
+        ctx.strokeStyle = this.shieldColor === 'red' ? '#ff555566' : '#5588ff66';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(-hw + 3, -hh + 5);
+        ctx.lineTo(0, -hh + 10);
+        ctx.lineTo(hw - 3, -hh + 5);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(0, -hh + 10);
+        ctx.lineTo(0, hh - 5);
+        ctx.stroke();
+
+        // Head with visor
+        ctx.fillStyle = isHurt ? '#fff' : '#6655bb';
+        ctx.fillRect(-6, -hh - 7, 12, 9);
+        // Phase visor (color matches shield)
+        ctx.fillStyle = shieldCol;
+        ctx.shadowColor = shieldCol;
+        ctx.shadowBlur = 6;
+        ctx.fillRect(-4, -hh - 4, 8, 3);
+        ctx.shadowBlur = 0;
+
+        // Shield label
+        ctx.font = '10px monospace';
+        ctx.fillStyle = shieldCol;
+        ctx.textAlign = 'center';
+        ctx.fillText(this.shieldColor === 'red' ? '🔥' : '🧊', 0, -hh - 12);
+
+        // Floating legs
+        ctx.fillStyle = '#3a3a5a';
+        ctx.fillRect(-hw + 3, hh, 6, 4);
+        ctx.fillRect(hw - 9, hh, 6, 4);
+    }
+
+    _renderSwarm(ctx, t, isHurt) {
+        const hw = this.width / 2;
+        const hh = this.height / 2;
+        const hover = Math.sin(t * 8 + this.x) * 3;
+
+        ctx.translate(0, hover);
+
+        // Tiny drone body
+        ctx.fillStyle = isHurt ? '#fff' : '#aaaa33';
+        ctx.fillRect(-hw, -hh, this.width, this.height);
+
+        // Wings/rotors
+        ctx.fillStyle = '#888';
+        const wingOff = Math.sin(t * 30) * 2;
+        ctx.fillRect(-hw - 4, -hh - 1 + wingOff, 4, 2);
+        ctx.fillRect(hw, -hh - 1 - wingOff, 4, 2);
+
+        // Eye
+        ctx.fillStyle = '#ff0000';
+        ctx.shadowColor = '#ff0000';
+        ctx.shadowBlur = 4;
+        ctx.fillRect(-2, -2, 4, 3);
+        ctx.shadowBlur = 0;
+
+        // Blinking warning
+        if (Math.sin(t * 5) > 0.5) {
+            ctx.fillStyle = '#ff000044';
+            ctx.beginPath();
+            ctx.arc(0, 0, hw + 3, 0, Math.PI * 2);
+            ctx.fill();
+        }
+    }
+
+    _renderElite(ctx, t, isHurt) {
+        const hw = this.width / 2;
+        const hh = this.height / 2;
+
+        // Dark aura
+        ctx.globalAlpha = 0.2;
+        ctx.fillStyle = '#cc2255';
+        ctx.beginPath();
+        ctx.arc(0, 0, hw + 10, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+
+        // Large armored body
+        ctx.fillStyle = isHurt ? '#fff' : '#8a2244';
+        ctx.fillRect(-hw, -hh, this.width, this.height);
+
+        // Heavy chest plate
+        ctx.fillStyle = isHurt ? '#fff' : '#aa3355';
+        ctx.fillRect(-hw + 2, -hh + 4, this.width - 4, 14);
+        // Cross
+        ctx.strokeStyle = '#cc4466';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(0, -hh + 5);
+        ctx.lineTo(0, -hh + 16);
+        ctx.moveTo(-6, -hh + 10);
+        ctx.lineTo(6, -hh + 10);
+        ctx.stroke();
+
+        // Shoulders
+        ctx.fillStyle = '#993355';
+        ctx.fillRect(-hw - 4, -hh + 2, 6, 10);
+        ctx.fillRect(hw - 2, -hh + 2, 6, 10);
+
+        // Head — horned helmet
+        ctx.fillStyle = isHurt ? '#fff' : '#aa2255';
+        ctx.fillRect(-8, -hh - 10, 16, 12);
+        // Horns
+        ctx.fillStyle = '#cc3366';
+        ctx.beginPath();
+        ctx.moveTo(-8, -hh - 8);
+        ctx.lineTo(-12, -hh - 18);
+        ctx.lineTo(-6, -hh - 6);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.moveTo(8, -hh - 8);
+        ctx.lineTo(12, -hh - 18);
+        ctx.lineTo(6, -hh - 6);
+        ctx.fill();
+
+        // Eyes
+        ctx.fillStyle = '#ffcc00';
+        ctx.shadowColor = '#ffcc00';
+        ctx.shadowBlur = 6;
+        ctx.fillRect(-5, -hh - 6, 4, 3);
+        ctx.fillRect(1, -hh - 6, 4, 3);
+        ctx.shadowBlur = 0;
+
+        // Star crown
+        ctx.font = '12px monospace';
+        ctx.fillStyle = '#ffcc00';
+        ctx.textAlign = 'center';
+        ctx.fillText('★', 0, -hh - 18);
+
+        // Heavy legs
+        ctx.fillStyle = '#4a2233';
+        const legOff = this.state === 'chase' ? Math.sin(t * 7) * 4 : 0;
+        ctx.fillRect(-hw + 1, hh, 10, 6 + legOff);
+        ctx.fillRect(hw - 11, hh, 10, 6 - legOff);
     }
 }
 

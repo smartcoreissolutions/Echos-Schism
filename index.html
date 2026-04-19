@@ -182,6 +182,7 @@
     <script src="src/entities/enemies.js"></script>
     <script src="src/systems/particles.js"></script>
     <script src="src/systems/dialogue.js"></script>
+    <script src="src/systems/vfx.js"></script>
     <script src="src/ui/hud.js"></script>
     <script src="src/levels/level.js"></script>
 
@@ -204,11 +205,16 @@
             this.engine.particles = this.particles;
             this.engine.dialogue = this.dialogue;
 
+            // VFX Engine
+            this.vfx = new VFXEngine(this.canvas.width, this.canvas.height);
+
             // Register systems
             this.engine.addSystem({
                 update: (dt, eng) => {
+                    const persona = eng.player ? eng.player.persona : 'frenzy';
                     this.particles.update(dt);
                     this.dialogue.update(dt);
+                    this.vfx.update(dt, persona);
                     if (eng.level) eng.level.update(dt, eng);
 
                     // Ambient particles
@@ -231,10 +237,19 @@
                 render: (ctx, eng) => {
                     if (eng.level) eng.level.render(ctx, eng);
                     this.particles.render(ctx);
+                    // Rain behind entities but after level
+                    const persona = eng.player ? eng.player.persona : 'frenzy';
+                    this.vfx.renderRain(ctx, eng.camera, persona);
                 },
                 renderUI: (ctx, eng) => {
                     this.hud.renderUI(ctx, eng);
                     this.dialogue.renderUI(ctx, eng);
+                    // Post-processing
+                    const persona = eng.player ? eng.player.persona : 'frenzy';
+                    this.vfx.renderLightning(ctx);
+                    const floorY = eng.level ? eng.level.baseFloorY : eng.height - 80;
+                    this.vfx.renderGroundReflections(ctx, floorY, eng.camera, persona);
+                    this.vfx.renderCRT(ctx, 0.25);
                 }
             });
 
