@@ -179,6 +179,17 @@ class Level {
         }
     }
 
+    getGroundFloorY(x, width) {
+        // Only ground-type platforms (no elevated ones) — for enemies
+        let floorY = this.baseFloorY;
+        for (const p of this.platforms) {
+            if (p.type === 'ground' && x + width > p.x && x < p.x + p.width) {
+                floorY = Math.min(floorY, p.y);
+            }
+        }
+        return floorY;
+    }
+
     getFloorY(x, width, vy) {
         // vy is optional — used for one-way platform check (only land when falling)
         let floorY = this.baseFloorY;

@@ -176,8 +176,8 @@ class Enemy {
             this.x += this.vx * dt;
             this.y += this.vy * dt;
 
-            // Floor
-            const floorY = engine.level ? engine.level.getFloorY(this.x, this.width) : engine.height - 80;
+            // Floor — enemies only collide with ground platforms (not elevated ones)
+            const floorY = engine.level ? engine.level.getGroundFloorY(this.x, this.width) : engine.height - 80;
             if (this.y + this.height > floorY) {
                 this.y = floorY - this.height;
                 this.vy = 0;
