@@ -65,15 +65,41 @@ class HUD {
             }
         }
 
-        // ── Perfect Shift notification ──
+        // ── Perfect Shift notification ── BIG AND OBVIOUS
         if (player.perfectShiftActive) {
-            ctx.font = 'bold 16px monospace';
-            ctx.fillStyle = '#ffffff';
+            const t = player.perfectShiftTimer;
+            const fadeAlpha = Math.min(1, t / 0.5);
+            const scale = 1 + Math.sin(performance.now() / 80) * 0.05;
+
+            ctx.save();
+            ctx.globalAlpha = fadeAlpha;
+
+            // Background flash banner
+            const bannerGrad = ctx.createLinearGradient(W / 2 - 200, 0, W / 2 + 200, 0);
+            bannerGrad.addColorStop(0, 'rgba(255, 204, 0, 0)');
+            bannerGrad.addColorStop(0.3, 'rgba(255, 204, 0, 0.15)');
+            bannerGrad.addColorStop(0.5, 'rgba(255, 204, 0, 0.25)');
+            bannerGrad.addColorStop(0.7, 'rgba(255, 204, 0, 0.15)');
+            bannerGrad.addColorStop(1, 'rgba(255, 204, 0, 0)');
+            ctx.fillStyle = bannerGrad;
+            ctx.fillRect(W / 2 - 200, 92, 400, 50);
+
+            // Title
+            ctx.font = `bold ${Math.round(20 * scale)}px monospace`;
+            ctx.fillStyle = '#ffcc00';
             ctx.textAlign = 'center';
-            ctx.shadowColor = '#ffffff';
-            ctx.shadowBlur = 10;
-            ctx.fillText('✦ PERFECT SHIFT ✦', W / 2, 110);
+            ctx.shadowColor = '#ffcc00';
+            ctx.shadowBlur = 15;
+            ctx.fillText('⚡ PERFECT SHIFT ⚡', W / 2, 112);
+
+            // Bonus description
+            ctx.font = '11px monospace';
+            ctx.fillStyle = '#fff';
+            ctx.shadowBlur = 5;
+            ctx.fillText(`+DMG  ·  ENEMIES SLOWED  ·  TIME FRACTURE (${t.toFixed(1)}s)`, W / 2, 130);
+
             ctx.shadowBlur = 0;
+            ctx.restore();
         }
 
         // ── Fullscreen persona overlay ──
@@ -186,6 +212,12 @@ class HUD {
 
     renderPersonaOverlay(ctx, player, engine) {
         const isFrenzy = player.persona === 'frenzy';
+
+        // Perfect Shift full-screen flash
+        if (player.perfectShiftFlash > 0) {
+            ctx.fillStyle = `rgba(255, 255, 255, ${player.perfectShiftFlash * 0.6})`;
+            ctx.fillRect(0, 0, engine.width, engine.height);
+        }
 
         if (isFrenzy) {
             // Red vignette + fire distortion at edges

@@ -221,6 +221,12 @@
 
                     // Trigger story events
                     this.checkStoryTriggers();
+
+                    // Check for new wave spawned
+                    if (eng.level && eng.level._justSpawnedWave) {
+                        this.announceWave(eng.level._justSpawnedWave);
+                        eng.level._justSpawnedWave = null;
+                    }
                 },
                 render: (ctx, eng) => {
                     if (eng.level) eng.level.render(ctx, eng);
@@ -298,8 +304,8 @@
                 }
             }
 
-            // Game over
-            if (p.hp <= 0 && this.engine.gameState === 'playing') {
+            // Game over — check the dead flag set by takeDamage
+            if (p.dead && this.engine.gameState === 'playing') {
                 this.engine.gameState = 'gameover';
                 this.showGameOver();
             }

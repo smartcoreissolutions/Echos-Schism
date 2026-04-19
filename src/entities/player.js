@@ -46,6 +46,7 @@ class Player {
         this.perfectShiftWindow = 0;
         this.perfectShiftActive = false;
         this.perfectShiftTimer = 0;
+        this.perfectShiftFlash = 0;
         this.shiftFlash = 0;
 
         // Deep state
@@ -78,8 +79,8 @@ class Player {
         const SPEED = 250;
         const JUMP_FORCE = -500;
         const DASH_SPEED = 600;
-        const FRENZY_SPEED_MULT = 1.15;
-        const CALM_SPEED_MULT = this.inDeepState ? 0.3 : 0.85;
+        const FRENZY_SPEED_MULT = 1.4;
+        const CALM_SPEED_MULT = this.inDeepState ? 0.25 : 0.65;
 
         const speedMult = this.persona === 'frenzy' ? FRENZY_SPEED_MULT : CALM_SPEED_MULT;
 
@@ -89,6 +90,7 @@ class Player {
         this.dashCooldown = Math.max(0, this.dashCooldown - dt);
         this.shiftCooldown = Math.max(0, this.shiftCooldown - dt);
         this.shiftFlash = Math.max(0, this.shiftFlash - dt);
+        if (this.perfectShiftFlash > 0) this.perfectShiftFlash = Math.max(0, this.perfectShiftFlash - dt);
 
         // Invincibility
         if (this.invincibleTimer > 0) {
@@ -243,20 +245,22 @@ class Player {
         // Check for perfect shift
         if (this.perfectShiftWindow > 0) {
             this.perfectShiftActive = true;
-            this.perfectShiftTimer = 2;
+            this.perfectShiftTimer = 3;
             this.perfectShifts++;
             engine.audio.playPerfectShift();
-            engine.shakeCamera(8);
+            engine.shakeCamera(12);
+            this.perfectShiftFlash = 0.4; // full-screen flash
 
             // Slow all enemies
             for (const e of engine.entities) {
                 if (e instanceof Enemy) {
-                    e.slowTimer = 2;
+                    e.slowTimer = 3;
                 }
             }
 
-            // Spawn time fracture particles
-            engine.particles.burstAt(this.x + this.width / 2, this.y + this.height / 2, 30, '#fff');
+            // Huge burst of white + gold particles
+            engine.particles.burstAt(this.x + this.width / 2, this.y + this.height / 2, 50, '#fff');
+            engine.particles.burstAt(this.x + this.width / 2, this.y + this.height / 2, 30, '#ffcc00');
         } else {
             engine.audio.playShift();
             engine.shakeCamera(3);
@@ -268,16 +272,16 @@ class Player {
     }
 
     updateStability(dt) {
-        // Drift toward current persona
-        const driftRate = 8;
+        // Drift toward current persona — fast enough to matter
+        const driftRate = 14;
         if (this.persona === 'frenzy') {
             this.stability = Math.max(0, this.stability - driftRate * dt);
         } else {
             this.stability = Math.min(100, this.stability + driftRate * dt);
         }
 
-        // Slow return to center
-        const centerPull = (50 - this.stability) * 0.5 * dt;
+        // Weak return to center (only gentle)
+        const centerPull = (50 - this.stability) * 0.15 * dt;
         this.stability += centerPull;
 
         // Deep state check
@@ -297,34 +301,34 @@ class Player {
         this.state = 'attack';
 
         if (this.persona === 'frenzy') {
-            this.attackTimer = 0.2;
-            this.attackCooldown = 0.15;
+            this.attackTimer = 0.15;
+            this.attackCooldown = 0.1;
             this.attackCombo = (this.attackCombo + 1) % (3 + this.skills.frenzy.comboExtend);
 
-            const range = 60;
-            const damage = 15 + (this.inDeepState ? 7 : 0) + (this.perfectShiftActive ? 5 : 0);
+            const range = 70;
+            const damage = 22 + (this.inDeepState ? 12 : 0) + (this.perfectShiftActive ? 8 : 0);
 
             this.hitEnemiesInRange(engine, range, damage);
-            engine.shakeCamera(4 + this.attackCombo * 2);
+            engine.shakeCamera(6 + this.attackCombo * 3);
             engine.audio.playHit('frenzy');
         } else {
-            this.attackTimer = 0.25;
-            this.attackCooldown = 0.2;
+            this.attackTimer = 0.3;
+            this.attackCooldown = 0.25;
 
             // Rapier thrust or energy shot
-            if (this.attackCombo % 3 === 2 || this.skills.calm.multishot) {
+            if (this.attackCombo % 2 === 1 || this.skills.calm.multishot) {
                 // Energy projectile
                 const proj = new Projectile(
                     this.x + (this.facing > 0 ? this.width : 0),
                     this.y + this.height / 2 - 4,
                     this.facing * 500, 0,
-                    10, '#55aaff', 'player'
+                    15, '#55aaff', 'player'
                 );
                 engine.addEntity(proj);
             }
 
-            const range = 50;
-            const damage = 10 + (this.perfectShiftActive ? 4 : 0);
+            const range = 45;
+            const damage = 7 + (this.perfectShiftActive ? 5 : 0);
             this.hitEnemiesInRange(engine, range, damage);
             this.attackCombo++;
             engine.audio.playHit('calm');
@@ -450,7 +454,9 @@ class Player {
 
         if (this.hp <= 0) {
             this.hp = 0;
-            engine.gameState = 'gameover';
+            // Don't set gameState here — let checkStoryTriggers handle it
+            // so the game over screen actually shows
+            this.dead = true;
         }
     }
 
@@ -527,14 +533,38 @@ class Player {
             }
         }
 
-        // Perfect shift aura
+        // Perfect shift aura — BIG, obvious, pulsing
         if (this.perfectShiftActive) {
+            const pulse = 0.5 + Math.sin(this.animTimer * 12) * 0.3;
+            // Outer glow ring
             ctx.strokeStyle = '#ffffff';
-            ctx.lineWidth = 2;
-            ctx.globalAlpha = 0.3 + Math.sin(this.animTimer * 10) * 0.2;
+            ctx.lineWidth = 3;
+            ctx.globalAlpha = pulse;
+            ctx.shadowColor = '#ffcc00';
+            ctx.shadowBlur = 25;
             ctx.beginPath();
-            ctx.arc(0, 0, 35, 0, Math.PI * 2);
+            ctx.arc(0, 0, 40 + Math.sin(this.animTimer * 8) * 5, 0, Math.PI * 2);
             ctx.stroke();
+            // Inner ring
+            ctx.strokeStyle = '#ffcc00';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.arc(0, 0, 28, 0, Math.PI * 2);
+            ctx.stroke();
+            // Lightning bolts radiating out
+            for (let i = 0; i < 4; i++) {
+                const angle = this.animTimer * 3 + i * Math.PI / 2;
+                const r1 = 30;
+                const r2 = 50 + Math.sin(this.animTimer * 15 + i) * 10;
+                ctx.strokeStyle = '#ffffff';
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.moveTo(Math.cos(angle) * r1, Math.sin(angle) * r1);
+                ctx.lineTo(Math.cos(angle + 0.2) * (r1 + r2) / 2, Math.sin(angle + 0.2) * (r1 + r2) / 2);
+                ctx.lineTo(Math.cos(angle) * r2, Math.sin(angle) * r2);
+                ctx.stroke();
+            }
+            ctx.shadowBlur = 0;
             ctx.globalAlpha = 1;
         }
 

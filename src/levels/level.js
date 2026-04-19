@@ -45,13 +45,13 @@ class Level {
             });
         }
 
-        // Scan doors
+        // Scan doors — thick enough to actually see and block passage
         for (let i = 0; i < 2; i++) {
             this.scanDoors.push({
                 x: 300 + Math.random() * (this.width - 600),
-                y: this.baseFloorY - 60,
-                width: 8,
-                height: 60,
+                y: this.baseFloorY - 80,
+                width: 16,
+                height: 80,
                 persona: Math.random() > 0.5 ? 'frenzy' : 'calm',
                 open: false
             });
@@ -67,15 +67,26 @@ class Level {
             });
         }
 
-        // Enemy spawn waves
+        // Enemy spawn waves — all 5 types from the start, harder waves later
         this.spawnPoints = [];
         const numWaves = 3 + Math.floor(difficulty * 2);
         for (let w = 0; w < numWaves; w++) {
             const wave = [];
             const numEnemies = 2 + Math.floor(Math.random() * 3 * difficulty);
             for (let i = 0; i < numEnemies; i++) {
-                const types = ['grunt', 'grunt', 'charger', 'swarm', 'swarm'];
-                if (difficulty >= 2) types.push('phase', 'elite');
+                // Wave 0: mostly grunts + swarms
+                // Wave 1+: mix in chargers and phase
+                // Wave 3+: elites appear
+                let types;
+                if (w === 0) {
+                    types = ['grunt', 'grunt', 'swarm', 'swarm', 'charger'];
+                } else if (w === 1) {
+                    types = ['grunt', 'charger', 'charger', 'swarm', 'phase'];
+                } else if (w === 2) {
+                    types = ['charger', 'phase', 'phase', 'swarm', 'grunt'];
+                } else {
+                    types = ['charger', 'phase', 'elite', 'swarm', 'grunt', 'phase'];
+                }
                 wave.push({
                     type: types[Math.floor(Math.random() * types.length)],
                     x: 200 + Math.random() * (this.width - 400),
@@ -119,6 +130,32 @@ class Level {
             } else {
                 door.open = false;
             }
+
+            // COLLISION: block player if door is closed
+            if (!door.open) {
+                const doorLeft = door.x;
+                const doorRight = door.x + door.width;
+                const doorTop = door.y;
+                const doorBottom = door.y + door.height;
+                const pLeft = player.x;
+                const pRight = player.x + player.width;
+                const pTop = player.y;
+                const pBottom = player.y + player.height;
+
+                // Only block if vertically overlapping
+                if (pBottom > doorTop && pTop < doorBottom) {
+                    // Moving right into door
+                    if (pRight > doorLeft && pLeft < doorLeft && player.vx > 0) {
+                        player.x = doorLeft - player.width;
+                        player.vx = 0;
+                    }
+                    // Moving left into door
+                    if (pLeft < doorRight && pRight > doorRight && player.vx < 0) {
+                        player.x = doorRight;
+                        player.vx = 0;
+                    }
+                }
+            }
         }
     }
 
@@ -144,6 +181,8 @@ class Level {
         if (this.enemiesAlive === 0 && this.waveTimer > this.waveCooldown) {
             if (this.spawnWave(engine)) {
                 this.waveTimer = 0;
+                // Announce wave (game controller will pick up waveIndex)
+                this._justSpawnedWave = this.waveIndex;
             }
         }
 
@@ -215,21 +254,58 @@ class Level {
             }
         }
 
-        // Scan doors
+        // Scan doors — render as solid barriers when closed
         for (const door of this.scanDoors) {
-            if (door.open) continue;
-            const doorColor = door.persona === 'frenzy' ? '#ff333388' : '#3388ff88';
-            ctx.fillStyle = doorColor;
-            ctx.fillRect(door.x, door.y, door.width, door.height);
-            ctx.strokeStyle = door.persona === 'frenzy' ? '#ff3333' : '#3388ff';
-            ctx.lineWidth = 2;
-            ctx.strokeRect(door.x, door.y, door.width, door.height);
+            if (door.open) {
+                // Open: translucent outline only
+                ctx.strokeStyle = door.persona === 'frenzy' ? '#ff333344' : '#3388ff44';
+                ctx.lineWidth = 1;
+                ctx.setLineDash([4, 4]);
+                ctx.strokeRect(door.x, door.y, door.width, door.height);
+                ctx.setLineDash([]);
+                continue;
+            }
+            // Closed: solid, glowing barrier
+            const doorColor = door.persona === 'frenzy' ? '#ff3333' : '#3388ff';
+            const doorBg = door.persona === 'frenzy' ? 'rgba(200, 30, 30, 0.7)' : 'rgba(30, 80, 200, 0.7)';
 
-            // Label
-            ctx.font = '8px monospace';
-            ctx.fillStyle = '#fff';
+            // Solid fill
+            ctx.fillStyle = doorBg;
+            ctx.fillRect(door.x, door.y, door.width, door.height);
+
+            // Glowing border
+            ctx.strokeStyle = doorColor;
+            ctx.lineWidth = 3;
+            ctx.shadowColor = doorColor;
+            ctx.shadowBlur = 12 + Math.sin(performance.now() / 200) * 5;
+            ctx.strokeRect(door.x, door.y, door.width, door.height);
+            ctx.shadowBlur = 0;
+
+            // Horizontal scan lines across the door
+            ctx.strokeStyle = doorColor;
+            ctx.lineWidth = 1;
+            ctx.globalAlpha = 0.4;
+            for (let sy = door.y; sy < door.y + door.height; sy += 6) {
+                ctx.beginPath();
+                ctx.moveTo(door.x, sy);
+                ctx.lineTo(door.x + door.width, sy);
+                ctx.stroke();
+            }
+            ctx.globalAlpha = 1;
+
+            // Icon on top
+            ctx.font = '14px monospace';
+            ctx.fillStyle = doorColor;
             ctx.textAlign = 'center';
-            ctx.fillText(door.persona === 'frenzy' ? '🔥' : '🧊', door.x + 4, door.y - 5);
+            ctx.fillText(door.persona === 'frenzy' ? '🔥' : '🧊', door.x + door.width / 2, door.y - 8);
+
+            // Hint text
+            ctx.font = '9px monospace';
+            ctx.fillStyle = '#ffffff';
+            ctx.shadowColor = '#000';
+            ctx.shadowBlur = 3;
+            ctx.fillText('SHIFT', door.x + door.width / 2, door.y - 20);
+            ctx.shadowBlur = 0;
         }
 
         // Floor line
