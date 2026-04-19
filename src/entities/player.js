@@ -172,9 +172,9 @@ class Player {
         }
 
         // --- GRAVITY ---
-        if (!this.grounded) {
-            this.vy += GRAVITY * dt;
-        }
+        // Reset grounded each frame — floor collision will re-set it
+        this.grounded = false;
+        this.vy += GRAVITY * dt;
 
         // --- APPLY PHYSICS ---
         this.x += this.vx * dt;
