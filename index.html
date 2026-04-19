@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Echo's Schism (艾可的裂变)</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            background: #000;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            font-family: 'Courier New', monospace;
+            overflow: hidden;
+        }
+        #gameContainer {
+            position: relative;
+            border: 2px solid #333;
+        }
+        #gameCanvas {
+            display: block;
+            image-rendering: pixelated;
+        }
+        #overlay {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            pointer-events: none;
+            z-index: 10;
+        }
+        #overlay.active { pointer-events: all; }
+        .menu-screen {
+            text-align: center;
+            color: #fff;
+            display: none;
+        }
+        .menu-screen.visible { display: block; }
+        .menu-screen h1 {
+            font-size: 42px;
+            letter-spacing: 4px;
+            margin-bottom: 5px;
+        }
+        .menu-screen .subtitle {
+            font-size: 14px;
+            color: #888;
+            margin-bottom: 30px;
+        }
+        .menu-screen .tagline {
+            font-size: 16px;
+            color: #aaa;
+            margin-bottom: 40px;
+            font-style: italic;
+        }
+        .title-frenzy { color: #ff3333; }
+        .title-calm { color: #3388ff; }
+        .title-split {
+            background: linear-gradient(90deg, #ff3333 0%, #ff3333 50%, #3388ff 50%, #3388ff 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        .menu-btn {
+            display: block;
+            width: 240px;
+            margin: 10px auto;
+            padding: 12px 24px;
+            background: transparent;
+            border: 2px solid #555;
+            color: #ccc;
+            font-family: 'Courier New', monospace;
+            font-size: 16px;
+            cursor: pointer;
+            transition: all 0.2s;
+            pointer-events: all;
+        }
+        .menu-btn:hover {
+            border-color: #fff;
+            color: #fff;
+            text-shadow: 0 0 10px rgba(255,255,255,0.5);
+        }
+        .menu-btn.frenzy:hover { border-color: #ff3333; color: #ff3333; }
+        .menu-btn.calm:hover { border-color: #3388ff; color: #3388ff; }
+        .controls-list {
+            text-align: left;
+            color: #888;
+            font-size: 12px;
+            margin: 20px auto;
+            max-width: 350px;
+            line-height: 1.8;
+        }
+        .controls-list span { color: #fff; display: inline-block; width: 90px; }
+        .wave-text {
+            font-size: 28px;
+            color: #fff;
+            text-shadow: 0 0 20px rgba(255,255,255,0.5);
+            animation: pulse 1s ease-in-out;
+        }
+        @keyframes pulse {
+            0% { opacity: 0; transform: scale(0.8); }
+            50% { opacity: 1; transform: scale(1.1); }
+            100% { opacity: 1; transform: scale(1); }
+        }
+        .gameover-stats {
+            color: #888;
+            font-size: 13px;
+            margin: 15px 0;
+            line-height: 1.8;
+        }
+        .gameover-stats .stat-val { color: #fff; }
+    </style>
+</head>
+<body>
+    <div id="gameContainer">
+        <canvas id="gameCanvas" width="960" height="540"></canvas>
+        <div id="overlay" class="active">
+            <!-- Title Screen -->
+            <div id="menuScreen" class="menu-screen visible">
+                <h1 class="title-split">ECHO'S SCHISM</h1>
+                <div class="subtitle">艾可的裂变</div>
+                <div class="tagline">"Two minds. One body. Shift to survive."</div>
+                <button class="menu-btn" onclick="game.startGame()">▶ START GAME</button>
+                <button class="menu-btn" onclick="game.showControls()">⌨ CONTROLS</button>
+                <div class="controls-list" id="controlsPanel" style="display:none">
+                    <span>A/D ←→</span> Move<br>
+                    <span>W / ↑</span> Jump<br>
+                    <span>SHIFT</span> Switch Persona<br>
+                    <span>J / Click</span> Attack<br>
+                    <span>K</span> Special Ability<br>
+                    <span>L</span> Ultimate<br>
+                    <span>SPACE</span> Dash/Dodge<br>
+                    <span>ESC</span> Pause<br>
+                    <hr style="border-color:#333;margin:10px 0">
+                    <span style="color:#ff3333">🔥 Ares</span> Melee berserker — chain combos, life-steal<br>
+                    <span style="color:#3388ff">🧊 Athena</span> Ranged tactician — precision, control<br>
+                    <hr style="border-color:#333;margin:10px 0">
+                    <em style="color:#ffcc00">Tip: Perfect Shift at the moment of impact for a time fracture!</em>
+                </div>
+            </div>
+
+            <!-- Pause Screen -->
+            <div id="pauseScreen" class="menu-screen">
+                <h1 style="color:#ffcc00;font-size:32px">PAUSED</h1>
+                <button class="menu-btn" onclick="game.resume()">▶ RESUME</button>
+                <button class="menu-btn" onclick="game.restart()">↺ RESTART</button>
+            </div>
+
+            <!-- Game Over Screen -->
+            <div id="gameoverScreen" class="menu-screen">
+                <h1 style="color:#ff3333;font-size:36px">ECHO FALLS</h1>
+                <div class="gameover-stats" id="gameoverStats"></div>
+                <button class="menu-btn frenzy" onclick="game.restart()">↺ TRY AGAIN</button>
+                <button class="menu-btn calm" onclick="game.toMenu()">⬅ MENU</button>
+            </div>
+
+            <!-- Wave Announcement -->
+            <div id="waveAnnounce" class="menu-screen">
+                <div class="wave-text" id="waveText"></div>
+            </div>
+
+            <!-- Victory Screen -->
+            <div id="victoryScreen" class="menu-screen">
+                <h1 id="victoryTitle" style="font-size:32px"></h1>
+                <div id="victoryDesc" style="color:#aaa;margin:15px 0;font-size:14px;max-width:400px;line-height:1.6"></div>
+                <div class="gameover-stats" id="victoryStats"></div>
+                <button class="menu-btn" onclick="game.restart()">↺ PLAY AGAIN</button>
+                <button class="menu-btn" onclick="game.toMenu()">⬅ MENU</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Load game modules -->
+    <script src="src/core/engine.js"></script>
+    <script src="src/core/input.js"></script>
+    <script src="src/core/audio.js"></script>
+    <script src="src/entities/player.js"></script>
+    <script src="src/entities/enemies.js"></script>
+    <script src="src/systems/particles.js"></script>
+    <script src="src/systems/dialogue.js"></script>
+    <script src="src/ui/hud.js"></script>
+    <script src="src/levels/level.js"></script>
+
+    <script>
+    /**
+     * Main Game Controller - Echo's Schism
+     */
+    class Game {
+        constructor() {
+            this.canvas = document.getElementById('gameCanvas');
+            this.engine = new GameEngine(this.canvas);
+            this.input = new InputManager();
+            this.audio = new AudioEngine();
+            this.particles = new ParticleSystem();
+            this.dialogue = new DialogueSystem();
+            this.hud = new HUD();
+
+            this.engine.input = this.input;
+            this.engine.audio = this.audio;
+            this.engine.particles = this.particles;
+            this.engine.dialogue = this.dialogue;
+
+            // Register systems
+            this.engine.addSystem({
+                update: (dt, eng) => {
+                    this.particles.update(dt);
+                    this.dialogue.update(dt);
+                    if (eng.level) eng.level.update(dt, eng);
+
+                    // Ambient particles
+                    if (eng.player) {
+                        this.particles.ambient(
+                            eng.camera.x, 0, eng.width, eng.height,
+                            eng.player.persona, dt
+                        );
+                    }
+
+                    // Trigger story events
+                    this.checkStoryTriggers();
+                },
+                render: (ctx, eng) => {
+                    if (eng.level) eng.level.render(ctx, eng);
+                    this.particles.render(ctx);
+                },
+                renderUI: (ctx, eng) => {
+                    this.hud.renderUI(ctx, eng);
+                    this.dialogue.renderUI(ctx, eng);
+                }
+            });
+
+            // Track for story triggers
+            this._prevKills = 0;
+            this._shiftCount = 0;
+
+            // Input processing at end of each frame
+            const origLoop = this.engine.loop.bind(this.engine);
+            this.engine.loop = (ts) => {
+                if (!this.engine.running) return;
+                this.engine.deltaTime = Math.min((ts - this.engine.lastTime) / 1000, 0.05);
+                this.engine.lastTime = ts;
+
+                this.handleGlobalInput();
+                this.engine.update(this.engine.deltaTime);
+                this.engine.render();
+                this.input.endFrame();
+                requestAnimationFrame(t => this.engine.loop(t));
+            };
+
+            this.engine.start();
+            this.showScreen('menuScreen');
+        }
+
+        handleGlobalInput() {
+            if (this.input.pause()) {
+                if (this.engine.gameState === 'playing') {
+                    this.pause();
+                } else if (this.engine.gameState === 'paused') {
+                    this.resume();
+                }
+            }
+            if (this.input.enter()) {
+                if (this.engine.gameState === 'menu') this.startGame();
+                else if (this.engine.gameState === 'gameover') this.restart();
+            }
+        }
+
+        checkStoryTriggers() {
+            const p = this.engine.player;
+            if (!p) return;
+
+            if (p.kills === 1 && this._prevKills === 0) {
+                this.dialogue.tryStoryTrigger('first_kill');
+            }
+            if (p.kills >= 10 && this._prevKills < 10) {
+                this.dialogue.tryStoryTrigger('ten_kills');
+            }
+            if (p.perfectShifts === 1) {
+                this.dialogue.tryStoryTrigger('first_perfect');
+            }
+            if (p.inDeepState && p.persona === 'frenzy') {
+                this.dialogue.tryStoryTrigger('first_deep_frenzy');
+            }
+            if (p.inDeepState && p.persona === 'calm') {
+                this.dialogue.tryStoryTrigger('first_deep_calm');
+            }
+
+            this._prevKills = p.kills;
+
+            // Check victory
+            if (this.engine.level) {
+                const level = this.engine.level;
+                if (level.waveIndex >= level.spawnPoints.length && level.enemiesAlive === 0 && p.kills > 0) {
+                    this.victory();
+                }
+            }
+
+            // Game over
+            if (p.hp <= 0 && this.engine.gameState === 'playing') {
+                this.engine.gameState = 'gameover';
+                this.showGameOver();
+            }
+        }
+
+        startGame() {
+            this.audio.init();
+            this.engine.entities = [];
+
+            // Create level
+            const level = new Level(3000, this.engine.height - 80);
+            level.generate(1);
+            this.engine.level = level;
+
+            // Create player
+            const player = new Player(100, level.baseFloorY - 60);
+            this.engine.player = player;
+            this.engine.addEntity(player);
+
+            // Spawn first wave
+            level.spawnWave(this.engine);
+
+            this.engine.camera.x = 0;
+            this.engine.gameState = 'playing';
+            this._prevKills = 0;
+            this.dialogue.triggered = new Set();
+
+            this.hideAllScreens();
+            document.getElementById('overlay').classList.remove('active');
+
+            // Opening dialogue
+            this.dialogue.tryStoryTrigger('first_shift');
+
+            // Wave announcement
+            this.announceWave(1);
+        }
+
+        pause() {
+            this.engine.gameState = 'paused';
+            document.getElementById('overlay').classList.add('active');
+            this.showScreen('pauseScreen');
+        }
+
+        resume() {
+            this.engine.gameState = 'playing';
+            this.hideAllScreens();
+            document.getElementById('overlay').classList.remove('active');
+        }
+
+        restart() {
+            this.startGame();
+        }
+
+        toMenu() {
+            this.engine.gameState = 'menu';
+            this.engine.entities = [];
+            this.engine.player = null;
+            this.engine.level = null;
+            document.getElementById('overlay').classList.add('active');
+            this.showScreen('menuScreen');
+        }
+
+        showGameOver() {
+            const p = this.engine.player;
+            const stats = document.getElementById('gameoverStats');
+            const dominance = p.frenzyDominance + (100 - p.stability);
+            stats.innerHTML = `
+                Kills: <span class="stat-val">${p.kills}</span><br>
+                Perfect Shifts: <span class="stat-val">${p.perfectShifts}</span><br>
+                Memory Fragments: <span class="stat-val">${p.fragments}</span><br>
+                Frenzy Dominance: <span class="stat-val">${Math.round(100 - p.stability)}%</span>
+            `;
+            document.getElementById('overlay').classList.add('active');
+            this.showScreen('gameoverScreen');
+        }
+
+        victory() {
+            this.engine.gameState = 'gameover';
+            const p = this.engine.player;
+
+            // Determine ending based on stability / dominance
+            let title, desc, color;
+            const frenzyDom = 100 - p.stability;
+
+            if (frenzyDom > 65) {
+                title = "🔥 ENDING A: WORLD IN FLAMES";
+                desc = "The fire consumed everything. Echo destroyed the Gridpoint Laboratory in a blaze of fury, but the flames took his memories too. Ares won. The weapon fulfilled its purpose — and nothing more.";
+                color = '#ff3333';
+            } else if (frenzyDom < 35) {
+                title = "🧊 ENDING B: COLD MACHINE";
+                desc = "Emotions: purged. Memories: archived. Humanity: irrelevant. Echo became what they always wanted — the perfect soldier. Athena's logic prevailed, but at what cost?";
+                color = '#3388ff';
+            } else {
+                title = "⚖️ ENDING C: SOUL RESONANCE";
+                desc = "Two voices became one. Ares and Athena found harmony, and Echo remembered — not just the pain, not just the algorithms, but the laughter. The human underneath it all. Free at last.";
+                color = '#ffcc00';
+            }
+
+            document.getElementById('victoryTitle').textContent = title;
+            document.getElementById('victoryTitle').style.color = color;
+            document.getElementById('victoryDesc').textContent = desc;
+            document.getElementById('victoryStats').innerHTML = `
+                Kills: <span class="stat-val">${p.kills}</span> |
+                Perfect Shifts: <span class="stat-val">${p.perfectShifts}</span> |
+                Fragments: <span class="stat-val">${p.fragments}</span><br>
+                Final Stability: <span class="stat-val">${Math.round(p.stability)}%</span>
+            `;
+
+            document.getElementById('overlay').classList.add('active');
+            this.showScreen('victoryScreen');
+        }
+
+        announceWave(num) {
+            const el = document.getElementById('waveAnnounce');
+            const text = document.getElementById('waveText');
+            text.textContent = `— WAVE ${num} —`;
+            el.classList.add('visible');
+            setTimeout(() => el.classList.remove('visible'), 2000);
+        }
+
+        showControls() {
+            const panel = document.getElementById('controlsPanel');
+            panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+        }
+
+        showScreen(id) {
+            this.hideAllScreens();
+            document.getElementById(id).classList.add('visible');
+        }
+
+        hideAllScreens() {
+            document.querySelectorAll('.menu-screen').forEach(s => s.classList.remove('visible'));
+        }
+    }
+
+    // Boot
+    const game = new Game();
+    </script>
+</body>
+</html>
